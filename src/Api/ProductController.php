@@ -54,6 +54,15 @@ class ProductController
                 },
             ],
         ]);
+        register_rest_route('wp-store-mp/v1', '/products/categories', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_categories'],
+                'permission_callback' => function () {
+                    return is_user_logged_in();
+                },
+            ],
+        ]);
     }
 
     public function get_my_products(WP_REST_Request $request)
@@ -98,6 +107,25 @@ class ProductController
         }
         $schema = AdminProductMetaBoxes::get_schema();
         return new WP_REST_Response(['tabs' => $schema], 200);
+    }
+
+    public function get_categories(WP_REST_Request $request)
+    {
+        $terms = get_terms([
+            'taxonomy' => 'store_product_cat',
+            'hide_empty' => false,
+        ]);
+        $items = [];
+        if (!is_wp_error($terms)) {
+            foreach ($terms as $t) {
+                $items[] = [
+                    'id' => (int) $t->term_id,
+                    'name' => (string) $t->name,
+                    'count' => (int) $t->count,
+                ];
+            }
+        }
+        return new WP_REST_Response(['items' => $items], 200);
     }
 
     public function create_product(WP_REST_Request $request)

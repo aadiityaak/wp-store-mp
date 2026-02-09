@@ -121,8 +121,12 @@ class Shortcode
                                         <input type="number" min="0" class="wps-form-input" x-model.number="form.image_id">
                                     </div>
                                     <div class="wps-form-group">
-                                        <label class="wps-form-label">Kategori (ID, koma)</label>
-                                        <input type="text" class="wps-form-input" x-model="form.categories_raw" placeholder="cth: 12,34">
+                                        <label class="wps-form-label">Kategori</label>
+                                        <select class="wps-form-input" multiple size="6" x-model="form.categories_selected">
+                                            <template x-for="cat in categories" :key="cat.id">
+                                                <option :value="cat.id" x-text="cat.name"></option>
+                                            </template>
+                                        </select>
                                     </div>
                                     <div class="wps-form-group">
                                         <label class="wps-form-label">Status</label>
@@ -183,12 +187,20 @@ class Shortcode
                                 </template>
                             </div>
                             <div x-show="activeFormTab==='gallery'">
-                                <template x-for="field in getFields('gallery')" :key="field.id">
-                                    <div class="wps-form-group">
-                                        <label class="wps-form-label" x-text="field.label"></label>
-                                        <input type="text" class="wps-form-input" x-model="form.meta[field.id]" placeholder="cth: 101,102,103">
+                                <div class="wps-form-group">
+                                    <label class="wps-form-label">Gambar Produk</label>
+                                    <input type="file" class="wps-form-input" multiple @change="uploadGallery($event)">
+                                    <div class="wps-grid wps-mt-2" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap:.5rem">
+                                        <template x-for="img in galleryUploads" :key="img.id">
+                                            <div class="wps-card">
+                                                <div class="wps-p-2">
+                                                    <img :src="img.url" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;">
+                                                    <button type="button" class="wps-btn wps-btn-danger wps-w-full wps-mt-2" @click="removeGallery(img.id)">Hapus</button>
+                                                </div>
+                                            </div>
+                                        </template>
                                     </div>
-                                </template>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -213,12 +225,13 @@ class Shortcode
                     showModal: false,
                     tabs: [],
                     schema: {},
+                    categories: [],
                     form: {
                         title: '',
                         content: '',
                         status: 'draft',
                         image_id: '',
-                        categories_raw: '',
+                        categories_selected: [],
                         meta: {}
                     },
                     init() {
@@ -233,6 +246,13 @@ class Shortcode
                                 this.schema[t.id] = t.fields;
                             }
                             this.initializeMetaDefaults();
+                        });
+                        fetch('<?php echo esc_url_raw(rest_url('wp-store-mp/v1/products/categories')); ?>', {
+                            headers: {
+                                'X-WP-Nonce': '<?php echo esc_js($nonce); ?>'
+                            }
+                        }).then(r => r.json()).then(c => {
+                            this.categories = Array.isArray(c.items) ? c.items : [];
                         });
                         this.fetchItems();
                     },
@@ -254,10 +274,75 @@ class Shortcode
                             for (const f of t.fields) {
                                 if (f.type === 'repeatable_text') meta[f.id] = [];
                                 else if (f.type === 'group_advanced_options') meta[f.id] = [];
+                                else if (f.type === 'file_list') meta[f.id] = [];
                                 else meta[f.id] = f.default ?? '';
                             }
                         }
                         this.form.meta = meta;
+                    },
+                    galleryUploads: [],
+                    uploadGallery(e) {
+                        const files = e.target.files;
+                        if (!files || files.length === 0) return;
+                        const uploads = [];
+                        const promises = [];
+                        for (const f of files) {
+                            const fd = new FormData();
+                            fd.append('file', f);
+                            promises.push(fetch('<?php echo esc_url_raw(rest_url('wp/v2/media')); ?>', {
+                                method: 'POST',
+                                headers: {
+                                    'X-WP-Nonce': '<?php echo esc_js($nonce); ?>'
+                                },
+                                body: fd
+                            }).then(r => r.json()).then(m => {
+                                if (m && m.id) {
+                                    uploads.push({
+                                        id: m.id,
+                                        url: m.source_url
+                                    });
+                                }
+                            }).catch(() => {}));
+                        }
+                        Promise.all(promises).then(() => {
+                            const key = '_store_gallery_ids';
+                            if (Array.isArray(this.form.meta[key])) {
+                                this.form.meta[key] = this.form.meta[key].concat(uploads.map(u => u.id));
+                            } else {
+                                this.form.meta[key] = uploads.map(u => u.id);
+                            }
+                            this.galleryUploads = this.galleryUploads.concat(uploads);
+                        });
+                    },
+                    removeGallery(id) {
+                        const key = '_store_gallery_ids';
+                        if (Array.isArray(this.form.meta[key])) {
+                            this.form.meta[key] = this.form.meta[key].filter(x => parseInt(x) !== parseInt(id));
+                        }
+                        this.galleryUploads = this.galleryUploads.filter(x => x.id !== id);
+                    },
+                    refreshGalleryPreviews() {
+                        const key = '_store_gallery_ids';
+                        const ids = Array.isArray(this.form.meta[key]) ? this.form.meta[key] : [];
+                        const uploads = [];
+                        const promises = [];
+                        for (const id of ids) {
+                            promises.push(fetch('<?php echo esc_url_raw(rest_url('wp/v2/media/')); ?>' + id, {
+                                headers: {
+                                    'X-WP-Nonce': '<?php echo esc_js($nonce); ?>'
+                                }
+                            }).then(r => r.json()).then(m => {
+                                if (m && m.id) {
+                                    uploads.push({
+                                        id: m.id,
+                                        url: m.source_url
+                                    });
+                                }
+                            }).catch(() => {}));
+                        }
+                        Promise.all(promises).then(() => {
+                            this.galleryUploads = uploads;
+                        });
                     },
                     openAdd() {
                         this.resetForm();
@@ -270,7 +355,7 @@ class Shortcode
                         this.form.content = it.content || '';
                         this.form.status = it.status || 'draft';
                         this.form.image_id = '';
-                        this.form.categories_raw = Array.isArray(it.categories) ? it.categories.join(',') : '';
+                        this.form.categories_selected = Array.isArray(it.categories) ? it.categories : [];
                         this.initializeMetaDefaults();
                         const map = {
                             '_store_product_type': it.product_type || 'physical',
@@ -287,13 +372,14 @@ class Shortcode
                             '_store_options': Array.isArray(it.options) ? it.options : [],
                             '_store_option2_name': it.option2_name || '',
                             '_store_advanced_options': Array.isArray(it.advanced_options) ? it.advanced_options : [],
-                            '_store_gallery_ids': Array.isArray(it.gallery_ids) ? it.gallery_ids.join(',') : ''
+                            '_store_gallery_ids': Array.isArray(it.gallery_ids) ? it.gallery_ids : []
                         };
                         for (const k in map) {
                             if (Object.prototype.hasOwnProperty.call(this.form.meta, k)) {
                                 this.form.meta[k] = map[k];
                             }
                         }
+                        this.refreshGalleryPreviews();
                         this.showModal = true;
                     },
                     resetForm() {
@@ -304,10 +390,11 @@ class Shortcode
                             content: '',
                             status: 'draft',
                             image_id: '',
-                            categories_raw: '',
+                            categories_selected: [],
                             meta: {}
                         };
                         this.initializeMetaDefaults();
+                        this.galleryUploads = [];
                     },
                     closeModal() {
                         this.resetForm();
@@ -315,7 +402,7 @@ class Shortcode
                     },
                     submit() {
                         this.loading = true;
-                        const cats = this.form.categories_raw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                        const cats = (Array.isArray(this.form.categories_selected) ? this.form.categories_selected : []).map(n => parseInt(n)).filter(n => !isNaN(n));
                         const body = {
                             title: this.form.title,
                             content: this.form.content,
