@@ -36,6 +36,9 @@ class Shortcode
                 <div class="wps-card">
                     <div class="wps-p-4">
                         <div class="wps-text-sm wps-font-medium wps-mb-2">Daftar Produk</div>
+                        <div class="wps-mb-3">
+                            <button class="wps-btn wps-btn-primary" @click="openAdd">Tambah Produk</button>
+                        </div>
                         <template x-if="items.length === 0">
                             <div class="wps-text-sm wps-text-gray-500">Belum ada produk.</div>
                         </template>
@@ -60,155 +63,142 @@ class Shortcode
                 </div>
                 <div class="wps-card wps-md-col-span-2">
                     <div class="wps-p-4">
-                        <div class="wps-flex wps-justify-between wps-items-center wps-mb-2">
+                        <div class="wps-text-sm wps-text-gray-600">Klik “Tambah Produk” untuk membuka formulir.</div>
+                    </div>
+                </div>
+            </div>
+            <div x-show="showModal" x-transition
+                style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;">
+                <div class="wps-card" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:min(920px,95vw);max-height:85vh;display:flex;flex-direction:column;">
+                    <div class="wps-p-4" style="border-bottom:1px solid #e5e7eb;">
+                        <div class="wps-flex wps-justify-between wps-items-center">
                             <div class="wps-text-sm wps-font-medium" x-text="editingId ? 'Ubah Produk' : 'Tambah Produk'"></div>
-                            <div>
-                                <button class="wps-btn wps-btn-secondary" @click="resetForm" x-show="editingId">Batal Edit</button>
-                            </div>
+                            <button class="wps-btn wps-btn-secondary" @click="closeModal">Tutup</button>
                         </div>
+                    </div>
+                    <div class="wps-p-4" style="flex:1;overflow:auto;">
                         <div class="wps-tabs">
-                            <button class="wps-tab" :class="{'active': activeFormTab==='general'}" @click="activeFormTab='general'">General</button>
-                            <button class="wps-tab" :class="{'active': activeFormTab==='inventory'}" @click="activeFormTab='inventory'">Inventory</button>
-                            <button class="wps-tab" :class="{'active': activeFormTab==='attributes'}" @click="activeFormTab='attributes'">Attributes</button>
-                            <button class="wps-tab" :class="{'active': activeFormTab==='gallery'}" @click="activeFormTab='gallery'">Gallery</button>
+                            <template x-for="tab in tabs" :key="tab.id">
+                                <button class="wps-tab" :class="{'active': activeFormTab===tab.id}" @click="activeFormTab=tab.id" x-text="tab.title"></button>
+                            </template>
                         </div>
                         <form @submit.prevent="submit" class="wps-mt-3">
-                            <div x-show="activeFormTab==='general'">
-                                <div class="wps-grid wps-grid-cols-1 wps-md-grid-cols-2 wps-gap-4">
-                                    <div>
-                                        <div class="wps-form-group">
-                                            <label class="wps-form-label">Judul</label>
-                                            <input type="text" class="wps-form-input" x-model="form.title" required>
-                                        </div>
-                                        <div class="wps-form-group">
-                                            <label class="wps-form-label">Deskripsi</label>
-                                            <textarea class="wps-form-textarea" x-model="form.content"></textarea>
-                                        </div>
-                                        <div class="wps-form-group">
-                                            <label class="wps-form-label">Tipe Produk</label>
-                                            <select class="wps-form-input" x-model="form.product_type">
-                                                <option value="physical">Produk Fisik</option>
-                                                <option value="digital">Produk Digital</option>
-                                            </select>
-                                        </div>
-                                        <div class="wps-grid wps-grid-cols-2 wps-gap-4">
-                                            <div class="wps-form-group">
-                                                <label class="wps-form-label">Harga</label>
-                                                <input type="number" step="0.01" min="0" class="wps-form-input" x-model.number="form.price">
-                                            </div>
-                                            <div class="wps-form-group">
-                                                <label class="wps-form-label">Harga Promo</label>
-                                                <input type="number" step="0.01" min="0" class="wps-form-input" x-model.number="form.sale_price">
-                                            </div>
-                                        </div>
-                                        <div class="wps-form-group">
-                                            <label class="wps-form-label">Diskon Sampai</label>
-                                            <input type="datetime-local" class="wps-form-input" x-model="form.flashsale_until">
-                                        </div>
-                                        <div class="wps-form-group" x-show="form.product_type==='digital'">
-                                            <label class="wps-form-label">File Digital (Attachment ID)</label>
-                                            <input type="number" min="0" class="wps-form-input" x-model.number="form.digital_file">
-                                        </div>
-                                        <div class="wps-grid wps-grid-cols-2 wps-gap-4">
-                                            <div class="wps-form-group">
-                                                <label class="wps-form-label">Status</label>
-                                                <select class="wps-form-input" x-model="form.status">
-                                                    <option value="draft">Draft</option>
-                                                    <option value="pending">Pending</option>
-                                                    <option value="publish">Publish</option>
-                                                </select>
-                                            </div>
-                                            <div class="wps-form-group">
-                                                <label class="wps-form-label">Label Produk</label>
-                                                <select class="wps-form-input" x-model="form.label">
-                                                    <option value="">-</option>
-                                                    <option value="label-best">Best Seller</option>
-                                                    <option value="label-limited">Limited</option>
-                                                    <option value="label-new">New</option>
-                                                </select>
-                                            </div>
-                                        </div>
+                            <div class="wps-grid wps-grid-cols-1 wps-md-grid-cols-2 wps-gap-4" x-show="activeFormTab==='general'">
+                                <div>
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label">Judul</label>
+                                        <input type="text" class="wps-form-input" x-model="form.title" required>
                                     </div>
-                                    <div>
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label">Deskripsi</label>
+                                        <textarea class="wps-form-textarea" x-model="form.content"></textarea>
+                                    </div>
+                                    <template x-for="field in getFields('general')" :key="field.id">
                                         <div class="wps-form-group">
-                                            <label class="wps-form-label">Gambar Utama (Attachment ID)</label>
-                                            <input type="number" min="0" class="wps-form-input" x-model.number="form.image_id">
+                                            <label class="wps-form-label" x-text="field.label"></label>
+                                            <template x-if="field.type==='select'">
+                                                <select class="wps-form-input" x-model="form.meta[field.id]">
+                                                    <template x-for="(label,val) in field.options" :key="val">
+                                                        <option :value="val" x-text="label"></option>
+                                                    </template>
+                                                </select>
+                                            </template>
+                                            <template x-if="field.type==='number'">
+                                                <input type="number" class="wps-form-input" :step="field.attributes?.step||'1'" :min="field.attributes?.min||null" x-model.number="form.meta[field.id]">
+                                            </template>
+                                            <template x-if="field.type==='datetime-local'">
+                                                <input type="datetime-local" class="wps-form-input" x-model="form.meta[field.id]">
+                                            </template>
+                                            <template x-if="field.type==='file'">
+                                                <input type="number" min="0" class="wps-form-input" x-model.number="form.meta[field.id]">
+                                            </template>
                                         </div>
-                                        <div class="wps-form-group">
-                                            <label class="wps-form-label">Kategori (ID, koma)</label>
-                                            <input type="text" class="wps-form-input" x-model="form.categories_raw" placeholder="cth: 12,34">
-                                        </div>
+                                    </template>
+                                </div>
+                                <div>
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label">Gambar Utama (Attachment ID)</label>
+                                        <input type="number" min="0" class="wps-form-input" x-model.number="form.image_id">
+                                    </div>
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label">Kategori (ID, koma)</label>
+                                        <input type="text" class="wps-form-input" x-model="form.categories_raw" placeholder="cth: 12,34">
+                                    </div>
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label">Status</label>
+                                        <select class="wps-form-input" x-model="form.status">
+                                            <option value="draft">Draft</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="publish">Publish</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
                             <div x-show="activeFormTab==='inventory'">
-                                <div class="wps-grid wps-grid-cols-1 wps-md-grid-cols-2 wps-gap-4">
+                                <template x-for="field in getFields('inventory')" :key="field.id">
                                     <div class="wps-form-group">
-                                        <label class="wps-form-label">SKU</label>
-                                        <input type="text" class="wps-form-input" x-model="form.sku">
+                                        <label class="wps-form-label" x-text="field.label"></label>
+                                        <input type="number" class="wps-form-input" :step="field.attributes?.step||'1'" :min="field.attributes?.min||null" x-model.number="form.meta[field.id]">
                                     </div>
-                                    <div class="wps-form-group">
-                                        <label class="wps-form-label">Stok</label>
-                                        <input type="number" step="1" min="0" class="wps-form-input" x-model.number="form.stock">
-                                    </div>
-                                    <div class="wps-form-group">
-                                        <label class="wps-form-label">Minimal Order</label>
-                                        <input type="number" step="1" min="1" class="wps-form-input" x-model.number="form.min_order">
-                                    </div>
-                                    <div class="wps-form-group">
-                                        <label class="wps-form-label">Berat (Kg)</label>
-                                        <input type="number" step="0.01" min="0" class="wps-form-input" x-model.number="form.weight_kg">
-                                    </div>
-                                </div>
+                                </template>
                             </div>
                             <div x-show="activeFormTab==='attributes'">
-                                <div class="wps-form-group">
-                                    <label class="wps-form-label">Nama Opsi (Basic)</label>
-                                    <input type="text" class="wps-form-input" x-model="form.option_name" placeholder="Contoh: Pilih Warna">
-                                </div>
-                                <div class="wps-form-group">
-                                    <label class="wps-form-label">Opsi Basic</label>
-                                    <div class="wps-flex wps-flex-col wps-gap-2">
-                                        <template x-for="(opt, idx) in form.options" :key="idx">
-                                            <div class="wps-flex wps-gap-2">
-                                                <input type="text" class="wps-form-input" x-model="form.options[idx]" placeholder="Contoh: merah">
-                                                <button type="button" class="wps-btn wps-btn-danger" @click="form.options.splice(idx,1)">Hapus</button>
+                                <template x-for="field in getFields('attributes')" :key="field.id">
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label" x-text="field.label"></label>
+                                        <template x-if="field.type==='text'">
+                                            <input type="text" class="wps-form-input" x-model="form.meta[field.id]">
+                                        </template>
+                                        <template x-if="field.type==='select'">
+                                            <select class="wps-form-input" x-model="form.meta[field.id]">
+                                                <template x-for="(label,val) in field.options" :key="val">
+                                                    <option :value="val" x-text="label"></option>
+                                                </template>
+                                            </select>
+                                        </template>
+                                        <template x-if="field.type==='repeatable_text'">
+                                            <div class="wps-flex wps-flex-col wps-gap-2">
+                                                <template x-for="(opt, idx) in form.meta[field.id]" :key="idx">
+                                                    <div class="wps-flex wps-gap-2">
+                                                        <input type="text" class="wps-form-input" x-model="form.meta[field.id][idx]">
+                                                        <button type="button" class="wps-btn wps-btn-danger" @click="form.meta[field.id].splice(idx,1)">Hapus</button>
+                                                    </div>
+                                                </template>
+                                                <button type="button" class="wps-btn wps-btn-secondary" @click="form.meta[field.id].push('')">Tambah Opsi</button>
                                             </div>
                                         </template>
-                                        <button type="button" class="wps-btn wps-btn-secondary" @click="form.options.push('')">Tambah Opsi</button>
-                                    </div>
-                                </div>
-                                <div class="wps-form-group">
-                                    <label class="wps-form-label">Nama Opsi (Advance)</label>
-                                    <input type="text" class="wps-form-input" x-model="form.option2_name" placeholder="Contoh: Pilih Ukuran">
-                                </div>
-                                <div class="wps-form-group">
-                                    <label class="wps-form-label">Opsi Advance</label>
-                                    <div class="wps-flex wps-flex-col wps-gap-2">
-                                        <template x-for="(g, i) in form.advanced_options" :key="i">
-                                            <div class="wps-grid wps-grid-cols-1 wps-md-grid-cols-3 wps-gap-2">
-                                                <input type="text" class="wps-form-input" x-model="form.advanced_options[i].label" placeholder="Label">
-                                                <input type="number" step="0.01" min="0" class="wps-form-input" x-model.number="form.advanced_options[i].price" placeholder="Harga">
-                                                <button type="button" class="wps-btn wps-btn-danger" @click="form.advanced_options.splice(i,1)">Hapus</button>
+                                        <template x-if="field.type==='group_advanced_options'">
+                                            <div class="wps-flex wps-flex-col wps-gap-2">
+                                                <template x-for="(g, i) in form.meta[field.id]" :key="i">
+                                                    <div class="wps-grid wps-grid-cols-1 wps-md-grid-cols-3 wps-gap-2">
+                                                        <input type="text" class="wps-form-input" x-model="form.meta[field.id][i].label" placeholder="Label">
+                                                        <input type="number" step="0.01" min="0" class="wps-form-input" x-model.number="form.meta[field.id][i].price" placeholder="Harga">
+                                                        <button type="button" class="wps-btn wps-btn-danger" @click="form.meta[field.id].splice(i,1)">Hapus</button>
+                                                    </div>
+                                                </template>
+                                                <button type="button" class="wps-btn wps-btn-secondary" @click="form.meta[field.id].push({label:'',price:''})">Tambah Opsi</button>
                                             </div>
                                         </template>
-                                        <button type="button" class="wps-btn wps-btn-secondary" @click="form.advanced_options.push({label:'',price:''})">Tambah Opsi</button>
                                     </div>
-                                </div>
+                                </template>
                             </div>
                             <div x-show="activeFormTab==='gallery'">
-                                <div class="wps-form-group">
-                                    <label class="wps-form-label">Gallery IDs (koma)</label>
-                                    <input type="text" class="wps-form-input" x-model="form.gallery_ids_raw" placeholder="cth: 101,102,103">
-                                </div>
-                            </div>
-                            <div class="wps-mt-4">
-                                <button type="submit" class="wps-btn wps-btn-primary" :disabled="loading">
-                                    <span x-show="!loading">Simpan</span>
-                                    <span x-show="loading">Menyimpan...</span>
-                                </button>
+                                <template x-for="field in getFields('gallery')" :key="field.id">
+                                    <div class="wps-form-group">
+                                        <label class="wps-form-label" x-text="field.label"></label>
+                                        <input type="text" class="wps-form-input" x-model="form.meta[field.id]" placeholder="cth: 101,102,103">
+                                    </div>
+                                </template>
                             </div>
                         </form>
+                    </div>
+                    <div class="wps-p-4" style="border-top:1px solid #e5e7eb;">
+                        <div class="wps-flex wps-justify-end">
+                            <button type="button" class="wps-btn wps-btn-primary" :disabled="loading" @click="submit">
+                                <span x-show="!loading">Simpan</span>
+                                <span x-show="loading">Menyimpan...</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -220,29 +210,30 @@ class Shortcode
                     loading: false,
                     editingId: null,
                     activeFormTab: 'general',
+                    showModal: false,
+                    tabs: [],
+                    schema: {},
                     form: {
                         title: '',
                         content: '',
-                        product_type: 'physical',
-                        price: '',
-                        sale_price: '',
-                        flashsale_until: '',
-                        digital_file: '',
-                        label: '',
-                        stock: '',
-                        sku: '',
-                        min_order: '',
-                        weight_kg: '',
                         status: 'draft',
                         image_id: '',
-                        option_name: '',
-                        options: [],
-                        option2_name: '',
-                        advanced_options: [],
-                        gallery_ids_raw: '',
-                        categories_raw: ''
+                        categories_raw: '',
+                        meta: {}
                     },
                     init() {
+                        fetch('<?php echo esc_url_raw(rest_url('wp-store-mp/v1/products/schema')); ?>', {
+                            headers: {
+                                'X-WP-Nonce': '<?php echo esc_js($nonce); ?>'
+                            }
+                        }).then(r => r.json()).then(s => {
+                            this.tabs = Array.isArray(s.tabs) ? s.tabs : [];
+                            this.schema = {};
+                            for (const t of this.tabs) {
+                                this.schema[t.id] = t.fields;
+                            }
+                            this.initializeMetaDefaults();
+                        });
                         this.fetchItems();
                     },
                     fetchItems() {
@@ -254,29 +245,56 @@ class Shortcode
                             this.items = Array.isArray(d.items) ? d.items : [];
                         });
                     },
+                    getFields(tabId) {
+                        return Array.isArray(this.schema[tabId]) ? this.schema[tabId] : [];
+                    },
+                    initializeMetaDefaults() {
+                        const meta = {};
+                        for (const t of this.tabs) {
+                            for (const f of t.fields) {
+                                if (f.type === 'repeatable_text') meta[f.id] = [];
+                                else if (f.type === 'group_advanced_options') meta[f.id] = [];
+                                else meta[f.id] = f.default ?? '';
+                            }
+                        }
+                        this.form.meta = meta;
+                    },
+                    openAdd() {
+                        this.resetForm();
+                        this.showModal = true;
+                    },
                     editItem(it) {
                         this.editingId = it.id;
                         this.activeFormTab = 'general';
                         this.form.title = it.title || '';
-                        this.form.content = '';
+                        this.form.content = it.content || '';
                         this.form.status = it.status || 'draft';
                         this.form.image_id = '';
-                        this.form.categories_raw = '';
-                        this.form.product_type = 'physical';
-                        this.form.price = it.price || '';
-                        this.form.sale_price = '';
-                        this.form.flashsale_until = '';
-                        this.form.digital_file = '';
-                        this.form.label = '';
-                        this.form.stock = it.stock || '';
-                        this.form.sku = '';
-                        this.form.min_order = '';
-                        this.form.weight_kg = '';
-                        this.form.option_name = '';
-                        this.form.options = [];
-                        this.form.option2_name = '';
-                        this.form.advanced_options = [];
-                        this.form.gallery_ids_raw = '';
+                        this.form.categories_raw = Array.isArray(it.categories) ? it.categories.join(',') : '';
+                        this.initializeMetaDefaults();
+                        const map = {
+                            '_store_product_type': it.product_type || 'physical',
+                            '_store_price': it.price ?? '',
+                            '_store_sale_price': it.sale_price ?? '',
+                            '_store_flashsale_until': it.flashsale_until || '',
+                            '_store_digital_file': it.digital_file || '',
+                            '_store_sku': it.sku || '',
+                            '_store_stock': it.stock ?? '',
+                            '_store_min_order': it.min_order ?? '',
+                            '_store_weight_kg': it.weight_kg ?? '',
+                            '_store_label': it.label || '',
+                            '_store_option_name': it.option_name || '',
+                            '_store_options': Array.isArray(it.options) ? it.options : [],
+                            '_store_option2_name': it.option2_name || '',
+                            '_store_advanced_options': Array.isArray(it.advanced_options) ? it.advanced_options : [],
+                            '_store_gallery_ids': Array.isArray(it.gallery_ids) ? it.gallery_ids.join(',') : ''
+                        };
+                        for (const k in map) {
+                            if (Object.prototype.hasOwnProperty.call(this.form.meta, k)) {
+                                this.form.meta[k] = map[k];
+                            }
+                        }
+                        this.showModal = true;
                     },
                     resetForm() {
                         this.editingId = null;
@@ -284,51 +302,27 @@ class Shortcode
                         this.form = {
                             title: '',
                             content: '',
-                            product_type: 'physical',
-                            price: '',
-                            sale_price: '',
-                            flashsale_until: '',
-                            digital_file: '',
-                            label: '',
-                            stock: '',
-                            sku: '',
-                            min_order: '',
-                            weight_kg: '',
                             status: 'draft',
                             image_id: '',
-                            option_name: '',
-                            options: [],
-                            option2_name: '',
-                            advanced_options: [],
-                            gallery_ids_raw: '',
-                            categories_raw: ''
+                            categories_raw: '',
+                            meta: {}
                         };
+                        this.initializeMetaDefaults();
+                    },
+                    closeModal() {
+                        this.resetForm();
+                        this.showModal = false;
                     },
                     submit() {
                         this.loading = true;
                         const cats = this.form.categories_raw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                        const galleryIds = this.form.gallery_ids_raw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
                         const body = {
                             title: this.form.title,
                             content: this.form.content,
                             status: this.form.status,
                             image_id: this.form.image_id,
                             categories: cats,
-                            product_type: this.form.product_type,
-                            price: this.form.price,
-                            sale_price: this.form.sale_price,
-                            flashsale_until: this.form.flashsale_until,
-                            digital_file: this.form.digital_file,
-                            label: this.form.label,
-                            stock: this.form.stock,
-                            sku: this.form.sku,
-                            min_order: this.form.min_order,
-                            weight_kg: this.form.weight_kg,
-                            option_name: this.form.option_name,
-                            options: this.form.options,
-                            option2_name: this.form.option2_name,
-                            advanced_options: this.form.advanced_options,
-                            gallery_ids: galleryIds
+                            meta: this.form.meta
                         };
                         const url = this.editingId ?
                             '<?php echo esc_url_raw(rest_url('wp-store-mp/v1/products/')); ?>' + this.editingId :
@@ -346,6 +340,7 @@ class Shortcode
                             if (d && d.success) {
                                 this.resetForm();
                                 this.fetchItems();
+                                this.showModal = false;
                             } else {
                                 alert(d && d.message ? d.message : 'Gagal menyimpan');
                             }

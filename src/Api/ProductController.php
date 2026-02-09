@@ -5,6 +5,7 @@ namespace WpStoreMp\Api;
 use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
+use WpStore\Admin\ProductMetaBoxes as AdminProductMetaBoxes;
 
 class ProductController
 {
@@ -44,6 +45,15 @@ class ProductController
                 },
             ],
         ]);
+        register_rest_route('wp-store-mp/v1', '/products/schema', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_schema'],
+                'permission_callback' => function () {
+                    return is_user_logged_in();
+                },
+            ],
+        ]);
     }
 
     public function get_my_products(WP_REST_Request $request)
@@ -79,6 +89,15 @@ class ProductController
             'page' => $paged,
         ];
         return new WP_REST_Response($response, 200);
+    }
+
+    public function get_schema(WP_REST_Request $request)
+    {
+        if (!class_exists(AdminProductMetaBoxes::class)) {
+            return new WP_REST_Response(['tabs' => []], 200);
+        }
+        $schema = AdminProductMetaBoxes::get_schema();
+        return new WP_REST_Response(['tabs' => $schema], 200);
     }
 
     public function create_product(WP_REST_Request $request)
@@ -123,7 +142,8 @@ class ProductController
         if (is_wp_error($post_id)) {
             return new WP_REST_Response(['message' => 'Gagal membuat produk'], 500);
         }
-        $this->save_meta_fields($post_id, [
+        $meta_payload = (array) $request->get_param('meta');
+        $meta_map = [
             '_store_product_type' => $product_type ?: 'physical',
             '_store_price' => $price,
             '_store_sale_price' => $sale_price,
@@ -139,7 +159,10 @@ class ProductController
             '_store_option2_name' => $option2_name,
             '_store_advanced_options' => $advanced_options,
             '_store_gallery_ids' => $gallery_ids,
-        ]);
+        ];
+        $allowed_meta = $this->get_allowed_meta_keys();
+        $filtered_payload = array_intersect_key($meta_payload, array_flip($allowed_meta));
+        $this->save_meta_fields($post_id, array_merge($meta_map, $filtered_payload));
         if ($image_id > 0) {
             set_post_thumbnail($post_id, $image_id);
         }
@@ -181,12 +204,13 @@ class ProductController
             $term_ids = array_map('intval', $cats);
             wp_set_object_terms($id, $term_ids, 'store_product_cat', false);
         }
-        $this->save_meta_fields($id, [
+        $meta_payload = (array) $request->get_param('meta');
+        $meta_map = [
             '_store_product_type' => (string) $request->get_param('product_type'),
             '_store_price' => $request->get_param('price'),
             '_store_sale_price' => $request->get_param('sale_price'),
             '_store_flashsale_until' => (string) $request->get_param('flashsale_until'),
-            '_store_digital_file' => (int) $request->get_param('digital_file'),
+            '_store_digital_file' => $request->get_param('digital_file'),
             '_store_sku' => (string) $request->get_param('sku'),
             '_store_stock' => $request->get_param('stock'),
             '_store_min_order' => $request->get_param('min_order'),
@@ -197,7 +221,10 @@ class ProductController
             '_store_option2_name' => (string) $request->get_param('option2_name'),
             '_store_advanced_options' => $request->get_param('advanced_options'),
             '_store_gallery_ids' => $request->get_param('gallery_ids'),
-        ]);
+        ];
+        $allowed_meta = $this->get_allowed_meta_keys();
+        $filtered_payload = array_intersect_key($meta_payload, array_flip($allowed_meta));
+        $this->save_meta_fields($id, array_merge($meta_map, $filtered_payload));
         return new WP_REST_Response(['success' => true, 'item' => $this->format_product($id)], 200);
     }
 
@@ -218,18 +245,42 @@ class ProductController
     private function format_product($id)
     {
         $price = get_post_meta($id, '_store_price', true);
+        $sale_price = get_post_meta($id, '_store_sale_price', true);
         $stock = get_post_meta($id, '_store_stock', true);
         $image = get_the_post_thumbnail_url($id, 'medium');
+        $gallery_meta = get_post_meta($id, '_store_gallery_ids', true);
+        $gallery_ids = [];
+        if (is_array($gallery_meta)) {
+            foreach ($gallery_meta as $aid => $url) {
+                $gallery_ids[] = (int) $aid;
+            }
+        }
+        $terms = wp_get_object_terms($id, 'store_product_cat', ['fields' => 'ids']);
         return [
             'id' => $id,
             'title' => get_the_title($id),
             'slug' => get_post_field('post_name', $id),
+            'content' => get_post_field('post_content', $id),
             'excerpt' => wp_trim_words(get_post_field('post_content', $id), 20),
             'price' => $price !== '' ? (float) $price : null,
+            'sale_price' => $sale_price !== '' ? (float) $sale_price : null,
             'stock' => $stock !== '' ? (int) $stock : null,
             'image' => $image ? $image : null,
             'link' => get_permalink($id),
             'status' => get_post_status($id),
+            'product_type' => get_post_meta($id, '_store_product_type', true) ?: 'physical',
+            'flashsale_until' => get_post_meta($id, '_store_flashsale_until', true) ?: '',
+            'digital_file' => get_post_meta($id, '_store_digital_file', true) ?: '',
+            'sku' => get_post_meta($id, '_store_sku', true) ?: '',
+            'min_order' => ($m = get_post_meta($id, '_store_min_order', true)) !== '' ? (int) $m : null,
+            'weight_kg' => ($w = get_post_meta($id, '_store_weight_kg', true)) !== '' ? (float) $w : null,
+            'label' => get_post_meta($id, '_store_label', true) ?: '',
+            'option_name' => get_post_meta($id, '_store_option_name', true) ?: '',
+            'options' => (array) get_post_meta($id, '_store_options', true),
+            'option2_name' => get_post_meta($id, '_store_option2_name', true) ?: '',
+            'advanced_options' => (array) get_post_meta($id, '_store_advanced_options', true),
+            'gallery_ids' => $gallery_ids,
+            'categories' => is_wp_error($terms) ? [] : array_map('intval', $terms),
         ];
     }
 
@@ -247,7 +298,70 @@ class ProductController
                     }
                 }
             }
+            if ($key === '_store_price' || $key === '_store_sale_price') {
+                $value = is_numeric($value) ? (float) $value : $value;
+            }
+            if ($key === '_store_stock' || $key === '_store_min_order') {
+                $value = is_numeric($value) ? (int) $value : $value;
+            }
+            if ($key === '_store_weight_kg') {
+                $value = is_numeric($value) ? (float) $value : $value;
+            }
+            if ($key === '_store_digital_file') {
+                if (is_numeric($value) && (int) $value > 0) {
+                    $url = wp_get_attachment_url((int) $value);
+                    if ($url) {
+                        $value = $url;
+                    }
+                }
+            }
+            if ($key === '_store_gallery_ids') {
+                if (is_array($value)) {
+                    $out = [];
+                    foreach ($value as $aid) {
+                        $aid = (int) $aid;
+                        if ($aid > 0) {
+                            $url = wp_get_attachment_url($aid);
+                            if ($url) {
+                                $out[$aid] = $url;
+                            }
+                        }
+                    }
+                    $value = $out;
+                }
+            }
             update_post_meta($post_id, $key, $value);
         }
+    }
+
+    private function get_allowed_meta_keys()
+    {
+        $keys = [
+            '_store_product_type',
+            '_store_price',
+            '_store_sale_price',
+            '_store_flashsale_until',
+            '_store_digital_file',
+            '_store_sku',
+            '_store_stock',
+            '_store_min_order',
+            '_store_weight_kg',
+            '_store_label',
+            '_store_option_name',
+            '_store_options',
+            '_store_option2_name',
+            '_store_advanced_options',
+            '_store_gallery_ids',
+        ];
+        if (class_exists(AdminProductMetaBoxes::class)) {
+            $schema = AdminProductMetaBoxes::get_schema();
+            $keys = [];
+            foreach ($schema as $tab) {
+                foreach ($tab['fields'] as $f) {
+                    $keys[] = $f['id'];
+                }
+            }
+        }
+        return array_values(array_unique($keys));
     }
 }
