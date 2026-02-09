@@ -50,7 +50,7 @@ class ProfileHooks
         }
         $nonce = wp_create_nonce('wp_rest');
     ?>
-        <div x-show="tab === 'vendor'" class="wps-card">
+        <div x-show="tab === 'vendor'" class="wps-card" id="mp-vendor-panel">
             <div class="wps-p-6 wps-pb-0 border-b border-gray-200">
                 <h2 class="wps-text-lg wps-font-medium wps-text-gray-900">Pengajuan Vendor</h2>
                 <p class="wps-mt-1 wps-text-sm wps-text-gray-500">Ajukan untuk membuka toko dan menjual produk Anda.</p>
@@ -59,6 +59,9 @@ class ProfileHooks
                 <?php if ($has_pending) : ?>
                     <div class="wps-alert wps-alert-info">Pengajuan Anda sedang diproses.</div>
                 <?php else : ?>
+                    <div id="mp-vendor-toast" style="display:none;position:fixed;bottom:30px;right:30px;padding:12px 16px;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.1);border-left:4px solid #46b450;border-radius:4px;z-index:9999;">
+                        <span class="wps-text-sm wps-text-gray-900" id="mp-vendor-toast-msg"></span>
+                    </div>
                     <form id="mp-vendor-apply-form">
                         <div class="wps-form-group">
                             <label class="wps-label">Nama Toko</label>
@@ -72,10 +75,25 @@ class ProfileHooks
                             <button type="submit" class="wps-btn wps-btn-primary">Ajukan</button>
                         </div>
                     </form>
+                    <div id="mp-vendor-pending" class="wps-alert wps-alert-info" style="display:none;">Pengajuan Anda sedang diproses.</div>
                     <script>
                         (function() {
                             var form = document.getElementById('mp-vendor-apply-form');
+                            var toast = document.getElementById('mp-vendor-toast');
+                            var toastMsg = document.getElementById('mp-vendor-toast-msg');
+                            var pendingBox = document.getElementById('mp-vendor-pending');
                             if (!form) return;
+
+                            function showToast(msg, type) {
+                                if (!toast || !toastMsg) return;
+                                toastMsg.textContent = msg || '';
+                                var color = (type === 'error') ? '#d63638' : '#46b450';
+                                toast.style.borderLeftColor = color;
+                                toast.style.display = 'block';
+                                setTimeout(function() {
+                                    toast.style.display = 'none';
+                                }, 2000);
+                            }
                             form.addEventListener('submit', function(e) {
                                 e.preventDefault();
                                 var data = new FormData(form);
@@ -91,16 +109,23 @@ class ProfileHooks
                                     },
                                     body: JSON.stringify(body)
                                 }).then(function(r) {
-                                    return r.json();
-                                }).then(function(d) {
-                                    if (d && d.success) {
-                                        alert('Pengajuan terkirim');
-                                        window.location.reload();
+                                    return r.json().then(function(d) {
+                                        return {
+                                            ok: r.ok,
+                                            data: d
+                                        };
+                                    });
+                                }).then(function(res) {
+                                    if (res && res.ok && res.data && res.data.success) {
+                                        showToast('Pengajuan terkirim', 'success');
+                                        if (form) form.style.display = 'none';
+                                        if (pendingBox) pendingBox.style.display = 'block';
                                     } else {
-                                        alert(d && d.message ? d.message : 'Gagal mengirim pengajuan');
+                                        var msg = (res && res.data && res.data.message) ? res.data.message : 'Gagal mengirim pengajuan';
+                                        showToast(msg, 'error');
                                     }
                                 }).catch(function() {
-                                    alert('Gagal mengirim pengajuan');
+                                    showToast('Gagal mengirim pengajuan', 'error');
                                 });
                             });
                         })();

@@ -11,13 +11,49 @@ class Menu
 
     public function add_menus()
     {
-        add_menu_page('Velocity Marketplace', 'Velocity Marketplace', 'manage_options', 'velocity-marketplace', [$this, 'render_dashboard'], 'dashicons-store', 58);
-        add_submenu_page('velocity-marketplace', 'Pengajuan Vendor', 'Pengajuan Vendor', 'manage_options', 'velocity-marketplace-requests', [$this, 'render_requests']);
+        add_menu_page('WP Store MP', 'WP Store MP', 'manage_options', 'wp-store-mp', [$this, 'render_dashboard'], 'dashicons-store', 58);
+        add_submenu_page('wp-store-mp', 'Pengajuan Vendor', 'Pengajuan Vendor', 'manage_options', 'wp-store-mp-requests', [$this, 'render_requests']);
     }
 
     public function render_dashboard()
     {
-        echo '<div class="wrap"><h1>Velocity Marketplace</h1><p>Kelola fitur marketplace.</p></div>';
+        $pending = new \WP_Query([
+            'post_type' => 'mp_vendor_request',
+            'post_status' => ['publish', 'pending'],
+            'posts_per_page' => 1,
+            'meta_query' => [
+                [
+                    'key' => '_mp_vendor_status',
+                    'value' => 'pending',
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        $approved = new \WP_Query([
+            'post_type' => 'mp_vendor_request',
+            'post_status' => ['publish', 'pending'],
+            'posts_per_page' => 1,
+            'meta_query' => [
+                [
+                    'key' => '_mp_vendor_status',
+                    'value' => 'approved',
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        $vendors = get_users(['role' => 'store_vendor', 'fields' => ['ID']]);
+        $pending_count = (int) $pending->found_posts;
+        $approved_count = (int) $approved->found_posts;
+        $vendors_count = is_array($vendors) ? count($vendors) : 0;
+        wp_reset_postdata();
+        echo '<div class="wrap"><h1>WP Store MP</h1>';
+        echo '<p>Ringkasan marketplace:</p>';
+        echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">';
+        echo '<div style="padding:12px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;min-width:180px;"><div style="font-size:12px;color:#6b7280;">Pending Requests</div><div style="font-size:20px;font-weight:600;color:#111827;">' . esc_html($pending_count) . '</div></div>';
+        echo '<div style="padding:12px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;min-width:180px;"><div style="font-size:12px;color:#6b7280;">Approved Requests</div><div style="font-size:20px;font-weight:600;color:#111827;">' . esc_html($approved_count) . '</div></div>';
+        echo '<div style="padding:12px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;min-width:180px;"><div style="font-size:12px;color:#6b7280;">Active Vendors</div><div style="font-size:20px;font-weight:600;color:#111827;">' . esc_html($vendors_count) . '</div></div>';
+        echo '</div>';
+        echo '</div>';
     }
 
     public function render_requests()
@@ -76,11 +112,11 @@ class Menu
         if ($uid > 0) {
             $u = get_userdata($uid);
             if ($u) {
-                $u->set_role('store_vendor');
+                $u->add_role('store_vendor');
             }
         }
         update_post_meta($rid, '_mp_vendor_status', 'approved');
-        wp_redirect(admin_url('admin.php?page=velocity-marketplace-requests'));
+        wp_redirect(admin_url('admin.php?page=wp-store-mp-requests'));
         exit;
     }
 }
