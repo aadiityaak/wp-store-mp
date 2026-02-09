@@ -12,6 +12,14 @@ class ProfileHooks
 
     public function render_vendor_tab_button()
     {
+        if (!is_user_logged_in()) {
+            return;
+        }
+        if (current_user_can('manage_options')) {
+            return;
+        }
+        $uid = get_current_user_id();
+        $user = get_userdata($uid);
 ?>
         <button @click="tab = 'vendor'" :class="{ 'active': tab === 'vendor' }" class="wps-tab">
             <?php echo \wps_icon(['name' => 'store', 'size' => 16, 'class' => 'wps-mr-2']); ?>Vendor
@@ -24,11 +32,12 @@ class ProfileHooks
         if (!is_user_logged_in()) {
             return;
         }
-        $uid = get_current_user_id();
-        $user = get_userdata($uid);
-        if ($user && in_array('store_vendor', (array) $user->roles, true)) {
+        if (current_user_can('manage_options')) {
             return;
         }
+        $uid = get_current_user_id();
+        $user = get_userdata($uid);
+        $is_vendor = ($user && in_array('store_vendor', (array) $user->roles, true));
         $existing = get_posts([
             'post_type' => 'mp_vendor_request',
             'post_status' => ['publish', 'pending'],
@@ -52,11 +61,66 @@ class ProfileHooks
     ?>
         <div x-show="tab === 'vendor'" class="wps-card" id="mp-vendor-panel">
             <div class="wps-p-6 wps-pb-0 border-b border-gray-200">
-                <h2 class="wps-text-lg wps-font-medium wps-text-gray-900">Pengajuan Vendor</h2>
-                <p class="wps-mt-1 wps-text-sm wps-text-gray-500">Ajukan untuk membuka toko dan menjual produk Anda.</p>
+                <h2 class="wps-text-lg wps-font-medium wps-text-gray-900"><?php echo $is_vendor ? 'Dashboard Vendor' : 'Pengajuan Vendor'; ?></h2>
+                <p class="wps-mt-1 wps-text-sm wps-text-gray-500">
+                    <?php echo $is_vendor ? 'Kelola produk dan toko Anda di bawah ini.' : 'Ajukan untuk membuka toko dan menjual produk Anda.'; ?>
+                </p>
             </div>
             <div class="wps-p-6">
-                <?php if ($has_pending) : ?>
+                <?php if ($is_vendor) : ?>
+                    <div x-data="mpVendorPanel()" x-init="init()" class="wps-grid wps-grid-cols-1 wps-md-grid-cols-4 wps-gap-4">
+                        <div class="wps-card">
+                            <div class="wps-p-4">
+                                <div class="wps-text-sm wps-text-gray-500 wps-mb-2">Menu</div>
+                                <div class="wps-flex wps-flex-col wps-gap-2">
+                                    <button type="button" class="wps-btn" :class="{'wps-btn-secondary': vtab !== 'toko', 'wps-btn-primary': vtab === 'toko'}" @click="vtab='toko'">Toko</button>
+                                    <button type="button" class="wps-btn" :class="{'wps-btn-secondary': vtab !== 'produk', 'wps-btn-primary': vtab === 'produk'}" @click="vtab='produk'">Produk</button>
+                                    <button type="button" class="wps-btn" :class="{'wps-btn-secondary': vtab !== 'orders', 'wps-btn-primary': vtab === 'orders'}" @click="vtab='orders'">Order</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="wps-card wps-md-col-span-3">
+                            <div class="wps-p-4">
+                                <template x-if="vtab==='toko'">
+                                    <div>
+                                        <div class="wps-text-sm wps-font-medium wps-mb-2">Profil Toko</div>
+                                        <div class="wps-text-sm wps-text-gray-600">Pengaturan toko akan ditambahkan di sini.</div>
+                                    </div>
+                                </template>
+                                <template x-if="vtab==='produk'">
+                                    <div>
+                                        <?php echo do_shortcode('[wp_store_mp_vendor_dashboard]'); ?>
+                                    </div>
+                                </template>
+                                <template x-if="vtab==='orders'">
+                                    <div>
+                                        <div class="wps-text-sm wps-font-medium wps-mb-2">Order</div>
+                                        <div class="wps-text-sm wps-text-gray-600">Daftar pesanan akan ditampilkan di sini.</div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <script>
+                        function mpVendorPanel(){
+                            return {
+                                vtab: 'produk',
+                                init(){
+                                    const urlParams = new URLSearchParams(window.location.search);
+                                    const v = urlParams.get('vtab');
+                                    if (v && ['toko','produk','orders'].includes(v)) {
+                                        this.vtab = v;
+                                    }
+                                    this.$watch('vtab', (val) => {
+                                        const url = new URL(window.location);
+                                        url.searchParams.set('vtab', val);
+                                        window.history.replaceState({}, '', url);
+                                    });
+                                }
+                            }
+                        }
+                    </script>
+                <?php elseif ($has_pending) : ?>
                     <div class="wps-alert wps-alert-info">Pengajuan Anda sedang diproses.</div>
                 <?php else : ?>
                     <div id="mp-vendor-toast" style="display:none;position:fixed;bottom:30px;right:30px;padding:12px 16px;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.1);border-left:4px solid #46b450;border-radius:4px;z-index:9999;">
@@ -103,6 +167,7 @@ class ProfileHooks
                                 };
                                 fetch('<?php echo esc_url_raw(rest_url('wp-store-mp/v1/vendor/apply')); ?>', {
                                     method: 'POST',
+                                    credentials: 'same-origin',
                                     headers: {
                                         'Content-Type': 'application/json',
                                         'X-WP-Nonce': '<?php echo esc_js($nonce); ?>'
